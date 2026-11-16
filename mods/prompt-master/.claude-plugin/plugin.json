@@ -1,6 +1,0 @@
-{
-  "name": "prompt-master",
-  "version": "0.2.0",
-  "description": "Botão ✦ Prompt Master acima do prompt: lê o rascunho, faz até 3 perguntas sobre o que falta e reescreve-o em 6 blocos, na própria caixa.",
-  "types": "./types/index.d.ts"
-}
