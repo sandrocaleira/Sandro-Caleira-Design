@@ -8,8 +8,8 @@ const BAND = (surface: 'terminal' | 'desktop') =>
     props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 10 },
   }) as const
 
-const PERGUNTA = 'Pra quem é o post?'
-const FINAL = 'Papel: redator de redes sociais.\nTarefa: 1 post sobre a cafeteria.'
+const PERGUNTA = 'Para quem é a publicação?'
+const FINAL = 'Papel: redator de redes sociais.\nTarefa: 1 publicação sobre o café.'
 
 test('o botão lê, pergunta 1 vez e põe o pedido reescrito na caixa, sem enviar', async ($, on) => {
   const calls: { system: string; prompt: string }[] = []
@@ -17,7 +17,7 @@ test('o botão lê, pergunta 1 vez e põe o pedido reescrito na caixa, sem envia
   let submitted = 0
 
   on('ui.toast', () => ({ value: undefined }))
-  on('prompt.read', () => ({ value: { text: 'escreve um post sobre minha cafeteria', cursor: 0 } }))
+  on('prompt.read', () => ({ value: { text: 'escreve uma publicação sobre o meu café', cursor: 0 } }))
   on('prompt.fill', (_, e) => {
     filled.push(e.text)
     return { isFilled: true, text: e.text, cursor: 0 }
@@ -43,13 +43,13 @@ test('o botão lê, pergunta 1 vez e põe o pedido reescrito na caixa, sem envia
   await ui.press({ key: 'prompt-master' })
 
   expect(calls.length).toBe(2)
-  expect(calls[0]!.system).toContain('Confira 6 blocos')
+  expect(calls[0]!.system).toContain('Verifica 6 blocos')
   expect(calls[1]!.prompt).toContain('Resposta: Clientes do bairro')
   expect(filled.at(-1)).toBe(FINAL)
   expect(submitted).toBe(0)
 
   await ui.press({ key: 'prompt-master-voltar' })
-  expect(filled.at(-1)).toBe('escreve um post sobre minha cafeteria')
+  expect(filled.at(-1)).toBe('escreve uma publicação sobre o meu café')
   await ui.unmount()
 })
 

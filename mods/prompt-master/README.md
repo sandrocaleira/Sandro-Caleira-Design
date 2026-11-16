@@ -1,17 +1,19 @@
 # Prompt Master
 
-Mod do Claude Code, feito segundo o guia "O prompt do botão Prompt Master" (VibeHub Academy).
+Mod do Claude Code, baseado no guia "O prompt do botão Prompt Master" (VibeHub Academy).
 Acrescenta o botão **✦ Prompt Master** na faixa por cima da caixa de prompt e o comando
 `/prompt-master [pedido]` (para onde a faixa não aparece, como no VS Code).
 
 ## Como funciona (2 chamadas ao modelo por clique)
 1. **Ler** — lê o rascunho da caixa. Caixa vazia: mostra um aviso e não gasta nada.
-2. **Perguntar** — 1.ª chamada (sonnet, 800 tokens) verifica os 6 blocos e faz no máximo
+2. **Perguntar** — 1.ª chamada (haiku, 800 tokens) verifica os 6 blocos e faz no máximo
    3 perguntas, cada uma com 2–3 respostas prováveis + "Pode decidir por mim".
-3. **Reescrever** — 2.ª chamada (sonnet, 2000 tokens) monta o pedido nos 6 blocos, sem inventar
+3. **Reescrever** — 2.ª chamada (haiku, 2000 tokens) monta o pedido nos 6 blocos, sem inventar
    dados (onde falta, escreve `[preencher: ...]`), e põe-no na caixa **sem enviar**.
 
 Depois aparece **↺ Voltar ao original**, que repõe o rascunho; desaparece quando envias um prompt.
+
+Instruções do modelo adaptadas para português de Portugal; modelo Haiku (mais rápido e gasta menos do limite do plano).
 
 ## Os 6 blocos
 Papel · Tarefa · Contexto · Formato · Restrições · Pronto quando

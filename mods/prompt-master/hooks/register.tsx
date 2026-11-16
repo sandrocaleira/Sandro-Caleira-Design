@@ -6,29 +6,29 @@ import type { EngineInterface, Register } from 'claude-code'
 // e devolve o pedido reescrito em 6 blocos à caixa, sem enviar.
 
 const COMMAND = 'prompt-master'
-const MODEL = 'sonnet'
+const MODEL = 'haiku'
 const MAX_PERGUNTAS = 3
 const DECIDIR = 'Pode decidir por mim'
 
 const isBusy = atom({ plugin: 'prompt-master', key: 'isBusy' } as const, false)
 const original = atom({ plugin: 'prompt-master', key: 'original' } as const, null)
 
-// Textos do guia, mantidos palavra por palavra.
-const ANALISE = `Você lê o rascunho de um pedido que alguém vai mandar pro Claude e decide se falta informação pra fazer um bom trabalho.
-Confira 6 blocos: Papel (quem o Claude deve ser), Tarefa (o que entregar), Contexto (pra quem é, qual o negócio, o que já existe), Formato (tamanho, estrutura, tom e onde vai ser usado), Restrições (o que evitar, prazo, limite) e Pronto quando (como saber que ficou bom).
-Pergunte só o que muda o resultado e que não dá pra deduzir do rascunho nem descobrir lendo os arquivos do projeto. Tarefa clara e pequena não precisa de pergunta.
-No máximo 3 perguntas, curtas, cada uma terminando em ponto de interrogação, com 2 ou 3 respostas prováveis de até 5 palavras cada.
-Responda só com JSON, sem texto antes ou depois, neste formato:
-{"perguntas":[{"pergunta":"Pra quem é o post?","opcoes":["Clientes do bairro","Estudantes","Empresas"]}]}
-Se não faltar nada, responda {"perguntas":[]}.`
+// Textos do guia, adaptados para português de Portugal.
+const ANALISE = `Lês o rascunho de um pedido que alguém vai enviar ao Claude e decides se falta informação para fazer um bom trabalho.
+Verifica 6 blocos: Papel (quem o Claude deve ser), Tarefa (o que entregar), Contexto (para quem é, qual o negócio, o que já existe), Formato (tamanho, estrutura, tom e onde vai ser usado), Restrições (o que evitar, prazo, limite) e Pronto quando (como saber que ficou bom).
+Pergunta só o que muda o resultado e que não se consegue deduzir do rascunho nem descobrir lendo os ficheiros do projeto. Uma tarefa clara e pequena não precisa de pergunta.
+No máximo 3 perguntas, curtas, cada uma a terminar em ponto de interrogação, com 2 ou 3 respostas prováveis de até 5 palavras cada.
+Responde só com JSON, sem texto antes ou depois, neste formato:
+{"perguntas":[{"pergunta":"Para quem é a publicação?","opcoes":["Clientes do bairro","Estudantes","Empresas"]}]}
+Se não faltar nada, responde {"perguntas":[]}.`
 
-const REESCRITA = `Você reescreve o rascunho de uma pessoa num pedido completo pro Claude, usando as respostas dela quando houver.
-Organize nestes blocos, nesta ordem, cada um começando com o nome e dois pontos: Papel, Tarefa, Contexto, Formato, Restrições, Pronto quando. Pule o bloco que não se aplica.
-Mantenha a intenção e todos os fatos do rascunho. Não invente número, nome, preço, prazo ou dado: onde faltar algo essencial que a pessoa não respondeu, escreva [preencher: o que falta].
-Quando a resposta for "Pode decidir por mim", escolha o padrão mais comum pro caso.
-Se o pedido mexe em código ou arquivos, peça pro Claude ler os arquivos do projeto antes de mudar e diga o que conferir no fim.
-Escreva no idioma do rascunho, direto, sem saudação e sem "por favor".
-Devolva só o pedido reescrito, pronto pra enviar, sem aspas, sem título e sem comentário antes ou depois.`
+const REESCRITA = `Reescreves o rascunho de uma pessoa num pedido completo para o Claude, usando as respostas dela quando as houver.
+Organiza nestes blocos, por esta ordem, cada um a começar pelo nome e dois pontos: Papel, Tarefa, Contexto, Formato, Restrições, Pronto quando. Salta o bloco que não se aplica.
+Mantém a intenção e todos os factos do rascunho. Não inventes números, nomes, preços, prazos ou dados: onde faltar algo essencial que a pessoa não respondeu, escreve [preencher: o que falta].
+Quando a resposta for "Pode decidir por mim", escolhe a opção mais comum para o caso.
+Se o pedido mexe em código ou ficheiros, pede ao Claude que leia os ficheiros do projeto antes de alterar e diz o que verificar no fim.
+Escreve na língua do rascunho; se for português, usa português de Portugal (tu, "ecrã", "ficheiro", "telemóvel", "equipa"), nunca português do Brasil. Sê direto, sem saudação e sem "por favor".
+Devolve só o pedido reescrito, pronto a enviar, sem aspas, sem título e sem comentários antes ou depois.`
 
 type Pergunta = { pergunta: string; opcoes: string[] }
 
