@@ -15,6 +15,8 @@ Depois aparece **↺ Voltar ao original**, que repõe o rascunho; desaparece qua
 
 Instruções do modelo adaptadas para português de Portugal; modelo Haiku (mais rápido e gasta menos do limite do plano).
 
+Inclui o bloco fixo **MEU NEGÓCIO** (constante `MEU_NEGOCIO` em `hooks/register.tsx`), enviado nas duas chamadas para o botão não perguntar o óbvio; só é usado quando o pedido é sobre o negócio.
+
 ## Os 6 blocos
 Papel · Tarefa · Contexto · Formato · Restrições · Pronto quando
 

@@ -20,7 +20,8 @@ Pergunta só o que muda o resultado e que não se consegue deduzir do rascunho n
 No máximo 3 perguntas, curtas, cada uma a terminar em ponto de interrogação, com 2 ou 3 respostas prováveis de até 5 palavras cada.
 Responde só com JSON, sem texto antes ou depois, neste formato:
 {"perguntas":[{"pergunta":"Para quem é a publicação?","opcoes":["Clientes do bairro","Estudantes","Empresas"]}]}
-Se não faltar nada, responde {"perguntas":[]}.`
+Se não faltar nada, responde {"perguntas":[]}.
+Não perguntes o que já está no bloco MEU NEGÓCIO.`
 
 const REESCRITA = `Reescreves o rascunho de uma pessoa num pedido completo para o Claude, usando as respostas dela quando as houver.
 Organiza nestes blocos, por esta ordem, cada um a começar pelo nome e dois pontos: Papel, Tarefa, Contexto, Formato, Restrições, Pronto quando. Salta o bloco que não se aplica.
@@ -28,7 +29,16 @@ Mantém a intenção e todos os factos do rascunho. Não inventes números, nome
 Quando a resposta for "Pode decidir por mim", escolhe a opção mais comum para o caso.
 Se o pedido mexe em código ou ficheiros, pede ao Claude que leia os ficheiros do projeto antes de alterar e diz o que verificar no fim.
 Escreve na língua do rascunho; se for português, usa português de Portugal (tu, "ecrã", "ficheiro", "telemóvel", "equipa"), nunca português do Brasil. Sê direto, sem saudação e sem "por favor".
+Usa o bloco MEU NEGÓCIO só quando o pedido for sobre o negócio; noutros temas, ignora-o.
 Devolve só o pedido reescrito, pronto a enviar, sem aspas, sem título e sem comentários antes ou depois.`
+
+// Contexto fixo do negócio (prompt 4 do guia). Edita aqui para mudar o que o botão já sabe.
+const MEU_NEGOCIO = `Negócio: Sandro Caleira Design — estúdio de Design de Comunicação. Serviços: identidade visual, branding e estratégia, design editorial, cartaz e campanhas, web e digital, direção de arte.
+Região: Portugal; trabalho 100% online, para clientes nacionais e internacionais.
+Público: marcas e negócios que precisam de identidade visual e comunicação com intenção.
+Tom de voz: português de Portugal, direto, profissional e conceptual, sem jargão vazio.
+Canais: site com portefólio, e-mail e WhatsApp.
+Nunca fazer: prometer prazos ou preços que eu não tenha confirmado.`
 
 type Pergunta = { pergunta: string; opcoes: string[] }
 
@@ -79,7 +89,7 @@ async function melhorar($: EngineInterface, texto?: string): Promise<void> {
     const analise = await $.model.complete({
       model: MODEL,
       system: ANALISE,
-      prompt: rascunho,
+      prompt: `MEU NEGÓCIO\n${MEU_NEGOCIO}\n\nRASCUNHO:\n${rascunho}`,
       maxTokens: 800,
     })
 
@@ -103,9 +113,9 @@ async function melhorar($: EngineInterface, texto?: string): Promise<void> {
       }
     }
 
-    const pedido = respostas.length
+    const pedido = `MEU NEGÓCIO\n${MEU_NEGOCIO}\n\n` + (respostas.length
       ? `RASCUNHO:\n${rascunho}\n\nRESPOSTAS:\n${respostas.join('\n\n')}`
-      : `RASCUNHO:\n${rascunho}`
+      : `RASCUNHO:\n${rascunho}`)
 
     const reescrita = await $.model.complete({
       model: MODEL,

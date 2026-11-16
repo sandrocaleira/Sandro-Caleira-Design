@@ -44,6 +44,9 @@ test('o botão lê, pergunta 1 vez e põe o pedido reescrito na caixa, sem envia
 
   expect(calls.length).toBe(2)
   expect(calls[0]!.system).toContain('Verifica 6 blocos')
+  expect(calls[0]!.prompt).toContain('MEU NEGÓCIO')
+  expect(calls[0]!.system).toContain('Não perguntes o que já está no bloco MEU NEGÓCIO')
+  expect(calls[1]!.prompt).toContain('Sandro Caleira Design')
   expect(calls[1]!.prompt).toContain('Resposta: Clientes do bairro')
   expect(filled.at(-1)).toBe(FINAL)
   expect(submitted).toBe(0)
