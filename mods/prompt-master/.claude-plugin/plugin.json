@@ -1,0 +1,5 @@
+{
+  "name": "prompt-master",
+  "version": "0.1.0",
+  "description": "Botão acima do prompt que pergunta o que falta no teu pedido e o reescreve com um framework de 6 blocos."
+}
