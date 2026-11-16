@@ -8,36 +8,70 @@ const BAND = (surface: 'terminal' | 'desktop') =>
     props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 10 },
   }) as const
 
-test('o botão envia o rascunho ao Prompt Master e a ferramenta devolve-o à caixa', async ($, on) => {
-  const submitted: string[] = []
+const PERGUNTA = 'Pra quem é o post?'
+const FINAL = 'Papel: redator de redes sociais.\nTarefa: 1 post sobre a cafeteria.'
+
+test('o botão lê, pergunta 1 vez e põe o pedido reescrito na caixa, sem enviar', async ($, on) => {
+  const calls: { system: string; prompt: string }[] = []
   const filled: string[] = []
-  on('command.register', (_, e) => ({ value: { command: e.name } }))
-  on('tool.register', (_, e) => ({ value: { tool: `mcp__prompt-master__${e.name}` } }))
+  let submitted = 0
+
   on('ui.toast', () => ({ value: undefined }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('prompt.read', () => ({ value: { text: 'faz um site para a minha loja', cursor: 0 } }))
+  on('prompt.read', () => ({ value: { text: 'escreve um post sobre minha cafeteria', cursor: 0 } }))
   on('prompt.fill', (_, e) => {
     filled.push(e.text)
     return { isFilled: true, text: e.text, cursor: 0 }
   })
   on('prompt.submit', (_, e) => {
-    submitted.push(e.text)
+    submitted += 1
     return { text: e.text }
   })
+  on('model.complete', (_, e) => {
+    calls.push({ system: String(e.system ?? ''), prompt: String(e.prompt) })
+    const text =
+      calls.length === 1
+        ? `ok {"perguntas":[{"pergunta":"${PERGUNTA}","opcoes":["Clientes do bairro","Estudantes"]}]}`
+        : FINAL
+    return { value: { isAnswered: true, text, usage: { input_tokens: 1, output_tokens: 1 } } } as never
+  })
+  on('tool.call', { tool: 'AskUserQuestion' }, (_, e) => {
+    const q = (e as unknown as { questions: { question: string }[] }).questions[0]!
+    return { result: { questions: [q], answers: { [q.question]: 'Clientes do bairro' } } } as never
+  })
 
-  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount(BAND('desktop'))
+  await ui.press({ key: 'prompt-master' })
+
+  expect(calls.length).toBe(2)
+  expect(calls[0]!.system).toContain('Confira 6 blocos')
+  expect(calls[1]!.prompt).toContain('Resposta: Clientes do bairro')
+  expect(filled.at(-1)).toBe(FINAL)
+  expect(submitted).toBe(0)
+
+  await ui.press({ key: 'prompt-master-voltar' })
+  expect(filled.at(-1)).toBe('escreve um post sobre minha cafeteria')
+  await ui.unmount()
+})
+
+test('caixa vazia mostra aviso e não chama o modelo', async ($, on) => {
+  let modelCalls = 0
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => {
+    toasts.push(String((e as unknown as { text: string }).text))
+    return { value: undefined }
+  })
+  on('prompt.read', () => ({ value: { text: '   ', cursor: 0 } }))
+  on('model.complete', () => {
+    modelCalls += 1
+    return { value: { isAnswered: false, reason: 'empty-reply', usage: { input_tokens: 0, output_tokens: 0 } } } as never
+  })
 
   for (const surface of ['terminal', 'desktop'] as const) {
-    submitted.length = 0
     const ui = await $.ui.mount(BAND(surface))
     await ui.press({ key: 'prompt-master' })
-    expect(submitted.length).toBe(1)
-    expect(submitted[0]).toContain('faz um site para a minha loja')
-    expect(submitted[0]).toContain('AskUserQuestion')
     await ui.unmount()
   }
 
-  const r = await $.tool.call({ tool: 'mcp__prompt-master__aplicar_prompt', prompt: 'PROMPT FINAL' } as never)
-  expect(filled.at(-1)).toBe('PROMPT FINAL')
-  expect(JSON.stringify(r)).toContain('caixa')
+  expect(modelCalls).toBe(0)
+  expect(toasts.length).toBe(2)
 })

@@ -1,5 +1,6 @@
 {
   "name": "prompt-master",
-  "version": "0.1.0",
-  "description": "Botão acima do prompt que pergunta o que falta no teu pedido e o reescreve com um framework de 6 blocos."
+  "version": "0.2.0",
+  "description": "Botão ✦ Prompt Master acima do prompt: lê o rascunho, faz até 3 perguntas sobre o que falta e reescreve-o em 6 blocos, na própria caixa.",
+  "types": "./types/index.d.ts"
 }

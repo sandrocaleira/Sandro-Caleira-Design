@@ -1,127 +1,199 @@
+import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-// Prompt Master: um botão acima da caixa de prompt (e o comando /prompt-master)
-// que pega no pedido que estás a escrever, pergunta o que falta e devolve-o
-// reescrito com 6 blocos, de volta à caixa de prompt, pronto a enviar.
+// Prompt Master — segue a especificação do guia "O prompt do botão Prompt Master"
+// (VibeHub Academy). Lê o rascunho da caixa, pergunta no máximo 3 coisas que faltam
+// e devolve o pedido reescrito em 6 blocos à caixa, sem enviar.
 
 const COMMAND = 'prompt-master'
-const TOOL = 'aplicar_prompt'
+const MODEL = 'sonnet'
+const MAX_PERGUNTAS = 3
+const DECIDIR = 'Pode decidir por mim'
 
-const BLOCOS = `1. Papel — quem o Claude deve ser (especialidade, nível, perspetiva).
-2. Objetivo — o resultado final pretendido e para quê/para quem.
-3. Contexto — situação, público, dados, ficheiros, o que já existe ou já foi tentado.
-4. Tarefa — o que fazer, em passos concretos e por ordem.
-5. Restrições — limites, tom, estilo, o que evitar, prazos, ferramentas.
-6. Formato e critério de conclusão — como entregar (estrutura, extensão, ficheiro) e como saber que está pronto.`
+const isBusy = atom({ plugin: 'prompt-master', key: 'isBusy' } as const, false)
+const original = atom({ plugin: 'prompt-master', key: 'original' } as const, null)
 
-const metaPrompt = (rascunho: string, ferramenta: string) => `[Prompt Master] Não executes o pedido abaixo. A tua tarefa é apenas melhorá-lo.
+// Textos do guia, mantidos palavra por palavra.
+const ANALISE = `Você lê o rascunho de um pedido que alguém vai mandar pro Claude e decide se falta informação pra fazer um bom trabalho.
+Confira 6 blocos: Papel (quem o Claude deve ser), Tarefa (o que entregar), Contexto (pra quem é, qual o negócio, o que já existe), Formato (tamanho, estrutura, tom e onde vai ser usado), Restrições (o que evitar, prazo, limite) e Pronto quando (como saber que ficou bom).
+Pergunte só o que muda o resultado e que não dá pra deduzir do rascunho nem descobrir lendo os arquivos do projeto. Tarefa clara e pequena não precisa de pergunta.
+No máximo 3 perguntas, curtas, cada uma terminando em ponto de interrogação, com 2 ou 3 respostas prováveis de até 5 palavras cada.
+Responda só com JSON, sem texto antes ou depois, neste formato:
+{"perguntas":[{"pergunta":"Pra quem é o post?","opcoes":["Clientes do bairro","Estudantes","Empresas"]}]}
+Se não faltar nada, responda {"perguntas":[]}.`
 
-Pedido original (rascunho do utilizador):
-<rascunho>
-${rascunho}
-</rascunho>
+const REESCRITA = `Você reescreve o rascunho de uma pessoa num pedido completo pro Claude, usando as respostas dela quando houver.
+Organize nestes blocos, nesta ordem, cada um começando com o nome e dois pontos: Papel, Tarefa, Contexto, Formato, Restrições, Pronto quando. Pule o bloco que não se aplica.
+Mantenha a intenção e todos os fatos do rascunho. Não invente número, nome, preço, prazo ou dado: onde faltar algo essencial que a pessoa não respondeu, escreva [preencher: o que falta].
+Quando a resposta for "Pode decidir por mim", escolha o padrão mais comum pro caso.
+Se o pedido mexe em código ou arquivos, peça pro Claude ler os arquivos do projeto antes de mudar e diga o que conferir no fim.
+Escreva no idioma do rascunho, direto, sem saudação e sem "por favor".
+Devolva só o pedido reescrito, pronto pra enviar, sem aspas, sem título e sem comentário antes ou depois.`
 
-Framework de 6 blocos:
-${BLOCOS}
+type Pergunta = { pergunta: string; opcoes: string[] }
 
-Passos:
-1. Analisa o rascunho bloco a bloco e identifica o que falta ou está ambíguo. Usa o contexto da sessão e do repositório para preencher o que conseguires deduzir com segurança, sem inventar.
-2. Se faltar informação que só o utilizador sabe, faz as perguntas numa única chamada à ferramenta AskUserQuestion (no máximo 4 perguntas, só as que mudam o resultado, cada uma com 2 a 4 opções concretas e a recomendada em primeiro lugar). Se nada faltar, salta este passo.
-3. Reescreve o pedido em português de Portugal, na voz do utilizador, com os 6 blocos como títulos curtos. Conciso: sem enchimento, sem repetir o óbvio.
-4. Chama a ferramenta ${ferramenta} com o prompt final, para o colocar na caixa de prompt do utilizador.
-5. Responde só com uma linha a dizer que o prompt melhorado está na caixa, pronto a rever e enviar, e com uma lista curta (máx. 3) do que acrescentaste.`
+function lerPerguntas(texto: string): Pergunta[] {
+  const inicio = texto.indexOf('{')
+  const fim = texto.lastIndexOf('}')
 
-let ferramenta = `mcp__prompt-master__${TOOL}`
+  if (inicio < 0 || fim <= inicio) {
+    return []
+  }
 
-async function melhorar($: EngineInterface, texto?: string) {
+  try {
+    const json = JSON.parse(texto.slice(inicio, fim + 1)) as { perguntas?: unknown }
+    const lista = Array.isArray(json.perguntas) ? json.perguntas : []
+
+    return lista
+      .map(item => {
+        const p = item as { pergunta?: unknown; opcoes?: unknown }
+        const opcoes = Array.isArray(p.opcoes)
+          ? p.opcoes.filter((o): o is string => typeof o === 'string' && o.trim() !== '').slice(0, 3)
+          : []
+
+        return { pergunta: typeof p.pergunta === 'string' ? p.pergunta.trim() : '', opcoes }
+      })
+      .filter(p => p.pergunta !== '')
+      .slice(0, MAX_PERGUNTAS)
+  } catch {
+    return []
+  }
+}
+
+async function melhorar($: EngineInterface, texto?: string): Promise<void> {
+  if (await read($, isBusy)) {
+    return
+  }
+
   const rascunho = (texto ?? (await $.prompt.read()).text).trim()
 
   if (!rascunho) {
-    $.ui.toast('Prompt Master: escreve primeiro o pedido na caixa de prompt.')
+    $.ui.toast('Escreve o pedido na caixa e carrega no botão outra vez.')
 
-    return false
+    return
   }
 
-  if (texto === undefined) {
-    await $.prompt.fill({ text: '', mode: 'replace' }).catch(() => undefined)
+  await update($, isBusy, () => true)
+
+  try {
+    const analise = await $.model.complete({
+      model: MODEL,
+      system: ANALISE,
+      prompt: rascunho,
+      maxTokens: 800,
+    })
+
+    if (!analise.isAnswered) {
+      $.ui.toast(`Prompt Master: o modelo não respondeu (${analise.reason}).`)
+
+      return
+    }
+
+    const respostas: string[] = []
+
+    for (const p of lerPerguntas(analise.text)) {
+      try {
+        const resposta = await $.ui.ask(p.pergunta, {
+          options: [...p.opcoes, DECIDIR],
+          header: 'Prompt Master',
+        })
+        respostas.push(`Pergunta: ${p.pergunta}\nResposta: ${resposta}`)
+      } catch {
+        // Pergunta fechada sem resposta: segue sem ela.
+      }
+    }
+
+    const pedido = respostas.length
+      ? `RASCUNHO:\n${rascunho}\n\nRESPOSTAS:\n${respostas.join('\n\n')}`
+      : `RASCUNHO:\n${rascunho}`
+
+    const reescrita = await $.model.complete({
+      model: MODEL,
+      system: REESCRITA,
+      prompt: pedido,
+      maxTokens: 2000,
+    })
+
+    if (!reescrita.isAnswered || !reescrita.text.trim()) {
+      const motivo = reescrita.isAnswered ? 'resposta vazia' : reescrita.reason
+      $.ui.toast(`Prompt Master: o modelo não respondeu (${motivo}).`)
+
+      return
+    }
+
+    const { isFilled } = await $.prompt.fill({ text: reescrita.text.trim(), mode: 'replace' })
+
+    if (isFilled) {
+      await update($, original, () => rascunho)
+    } else {
+      $.ui.toast('Prompt Master: não consegui escrever na caixa de prompt.')
+    }
+  } catch (err) {
+    $.ui.toast(`Prompt Master falhou: ${String(err)}`)
+  } finally {
+    await update($, isBusy, () => false)
   }
+}
 
-  await $.prompt.submit({ text: metaPrompt(rascunho, ferramenta) })
+async function voltarAoOriginal($: EngineInterface): Promise<void> {
+  const texto = await read($, original)
 
-  return true
+  if (texto !== null) {
+    await $.prompt.fill({ text: texto, mode: 'replace' })
+    await update($, original, () => null)
+  }
 }
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    const { tool } = await $.tool.register({
-      name: TOOL,
-      description:
-        'Prompt Master: coloca o prompt final, já melhorado, na caixa de prompt do utilizador (substitui o rascunho), para ele rever e enviar.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          prompt: { type: 'string', description: 'O prompt final, completo, com os 6 blocos.' },
-        },
-        required: ['prompt'],
-      },
-      isDeferred: false,
-    })
-    ferramenta = tool
-
+    await update($, isBusy, () => false)
     await $.command.register({
       name: COMMAND,
-      description: 'Melhora o pedido: pergunta o que falta e reescreve-o com 6 blocos',
+      description: 'Pergunta o que falta no pedido e reescreve-o em 6 blocos',
       argumentHint: '[pedido — vazio usa o rascunho da caixa]',
     })
 
     return next(e)
   })
 
-  on('command.run', { command: COMMAND }, async ($, e) => {
-    try {
-      const args = (e.args ?? '').trim()
-      const ok = await melhorar($, args || undefined)
+  on('command.run', { command: COMMAND }, ($, e) => {
+    const args = (e.args ?? '').trim()
+    void melhorar($, args || undefined).catch(() => undefined)
 
-      return { text: ok ? 'Prompt Master a analisar o teu pedido…' : 'Sem pedido para melhorar.' }
-    } catch (err) {
-      return { text: `Prompt Master falhou: ${String(err)}` }
-    }
+    return { text: 'Prompt Master a ler o pedido…' }
   })
 
-  on('tool.call', async ($, e, next) => {
-    if (e.tool !== ferramenta) {
-      return next(e)
+  on('prompt.submit', async ($, e, next) => {
+    if (e.origin.kind !== 'plugin') {
+      await update($, original, () => null).catch(() => undefined)
     }
 
-    const input = e as unknown as { prompt?: unknown }
-    const prompt = typeof input.prompt === 'string' ? input.prompt.trim() : ''
-
-    if (!prompt) {
-      return { deny: 'Falta o campo "prompt" com o texto final.' }
-    }
-
-    const isFilled = await $.prompt
-      .fill({ text: prompt, mode: 'replace' })
-      .then(r => r.isFilled)
-      .catch(() => false)
-
-    return {
-      result: isFilled
-        ? 'Prompt colocado na caixa de prompt do utilizador.'
-        : `Não foi possível escrever na caixa de prompt; mostra o prompt final ao utilizador num bloco de código:\n\n${prompt}`,
-    }
+    return next(e)
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey || e.props.isWorking) {
+    if (e.props.hasSurvey) {
       return next(e)
     }
 
     const { Box, Button } = $.ui.resolve(e)
+    const busy = await read($, isBusy)
+    const temOriginal = (await read($, original)) !== null
 
     return (
-      <Box>
-        <Button key="prompt-master" label="✨ Melhorar prompt" onPress={() => void melhorar($).catch(err => $.ui.toast(`Prompt Master falhou: ${String(err)}`))} />
+      <Box gap={1}>
+        <Button
+          key="prompt-master"
+          label={busy ? '✦ Prompt Master: a ler...' : '✦ Prompt Master'}
+          onPress={() => void melhorar($).catch(() => undefined)}
+        />
+        {temOriginal && !busy && (
+          <Button
+            key="prompt-master-voltar"
+            label="↺ Voltar ao original"
+            onPress={() => void voltarAoOriginal($).catch(() => undefined)}
+          />
+        )}
       </Box>
     )
   })
